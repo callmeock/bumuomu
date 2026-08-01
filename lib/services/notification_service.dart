@@ -2,8 +2,11 @@ import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' hide Category;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../main.dart' show navigatorKey, TournamentPage;
+import '../models/category.dart';
 
 /// Firebase Cloud Messaging servisi
 /// Push notification yönetimi için
@@ -14,6 +17,22 @@ class NotificationService {
 
   /// FCM token'ı al
   static String? get fcmToken => _fcmToken;
+
+  static const String _prefsKey = 'notifications_enabled';
+
+  /// Kullanıcının uygulama içi bildirim tercihi (varsayılan: açık).
+  /// Uygulama ön plandayken gelen push'ların local banner olarak gösterilip
+  /// gösterilmeyeceğini kontrol eder. Arka plan/kapalıyken gelen bildirimler
+  /// sistem seviyesinde OS ayarlarına tabidir, bu tercih onu etkilemez.
+  static Future<bool> notificationsEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_prefsKey) ?? true;
+  }
+
+  static Future<void> setNotificationsEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefsKey, value);
+  }
 
   /// Bildirim servisini başlat
   static Future<void> initialize() async {
@@ -202,7 +221,12 @@ class NotificationService {
   /// Foreground mesaj işleme (uygulama açıkken)
   static Future<void> _handleForegroundMessage(RemoteMessage message) async {
     debugPrint('📨 Foreground bildirim alındı: ${message.notification?.title}');
-    
+
+    if (!await notificationsEnabled()) {
+      debugPrint('🔕 Kullanıcı uygulama içi bildirimleri kapatmış, banner gösterilmiyor.');
+      return;
+    }
+
     // Local notification göster
     if (message.notification != null) {
       final notification = message.notification!;
@@ -239,16 +263,47 @@ class NotificationService {
     }
   }
 
-  /// Bildirime tıklandığında
+  /// Bildirime tıklandığında — varsa categoryKey'e göre ilgili turnuvaya yönlendirir.
   static void _handleMessageOpenedApp(RemoteMessage message) {
     debugPrint('👆 Bildirime tıklandı: ${message.notification?.title}');
-    
-    // Burada navigasyon yapılabilir
-    // Örn: belirli bir kategoriye yönlendirme
-    final data = message.data;
-    if (data.containsKey('categoryKey')) {
-      // Navigator ile kategori sayfasına git
-      debugPrint('📂 Kategoriye yönlendiriliyor: ${data['categoryKey']}');
+
+    final categoryKey = message.data['categoryKey'];
+    if (categoryKey == null || categoryKey.isEmpty) return;
+
+    debugPrint('📂 Kategoriye yönlendiriliyor: $categoryKey');
+    _navigateToCategory(categoryKey);
+  }
+
+  static Future<void> _navigateToCategory(String categoryKey) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('categories')
+          .doc(categoryKey)
+          .get();
+      if (!doc.exists) {
+        debugPrint('⚠️ Bildirimdeki kategori bulunamadı: $categoryKey');
+        return;
+      }
+
+      final category = Category.fromFirestore(doc);
+      if (category.items.length != 32) {
+        debugPrint('⚠️ Kategori turnuva formatında değil (${category.items.length} öğe), yönlendirme atlandı.');
+        return;
+      }
+
+      final state = navigatorKey.currentState;
+      if (state == null) return;
+      state.push(
+        MaterialPageRoute(
+          builder: (_) => TournamentPage(
+            categoryName: category.name,
+            categoryKey: category.id,
+            items: category.items,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('❌ Bildirim yönlendirme hatası: $e');
     }
   }
 

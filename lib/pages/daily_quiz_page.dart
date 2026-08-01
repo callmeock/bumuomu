@@ -42,6 +42,7 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
   String? _error;
   bool _unlocked = false;
   bool _loadingUnlocked = true;
+  int _streakCount = 0;
 
   @override
   void initState() {
@@ -220,10 +221,11 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
 
       final data = doc.data();
       final dailyUnlocks = data?['dailyUnlocks'] as Map<String, dynamic>? ?? {};
-      
+
       if (!mounted) return;
       setState(() {
         _unlocked = dailyUnlocks[todayStr] == true;
+        _streakCount = (data?['streakCount'] as num?)?.toInt() ?? 0;
         _loadingUnlocked = false;
       });
     } catch (e) {
@@ -417,6 +419,36 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Günün Quizi'),
+        actions: [
+          if (!_loadingUnlocked && _streakCount > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('🔥', style: TextStyle(fontSize: 14)),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$_streakCount gün',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(

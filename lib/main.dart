@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -24,6 +23,10 @@ import 'widgets/app_lifecycle_analytics.dart';
 import 'analytics/analytics_constants.dart';
 
 export 'services/analytics_helper.dart';
+
+/// Global navigator key so services (e.g. NotificationService, for push deep-links)
+/// can push routes without a BuildContext.
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Route<dynamic>? _onGenerateRoute(RouteSettings settings) {
   if (settings.name == '/main') {
@@ -105,6 +108,7 @@ class MyApp extends StatelessWidget {
           useMaterial3: true,
         ),
         debugShowCheckedModeBanner: false,
+        navigatorKey: navigatorKey,
         navigatorObservers: <NavigatorObserver>[
           AnalyticsRouteObserver.instance,
         ],

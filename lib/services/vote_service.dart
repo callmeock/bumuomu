@@ -73,6 +73,7 @@ class VoteService {
     });
 
     await incrementUserVoteCount();
+    await updateDailyStreak();
   }
 
   /// Increment the current user's lifetime vote counter (user_progress.totalVotes)
@@ -87,6 +88,46 @@ class VoteService {
           .set({
         'totalVotes': FieldValue.increment(1),
       }, SetOptions(merge: true));
+    } catch (_) {
+      // Non-critical stat; ignore failures rather than blocking the vote flow.
+    }
+  }
+
+  static String _dateKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Update the current user's daily return streak (user_progress.streakCount/longestStreak/lastActiveDate).
+  /// Called once per vote — only the first vote of a calendar day actually moves the streak.
+  static Future<void> updateDailyStreak() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final ref = FirebaseFirestore.instance.collection('user_progress').doc(user.uid);
+    final today = DateTime.now();
+    final todayKey = _dateKey(today);
+    final yesterdayKey = _dateKey(today.subtract(const Duration(days: 1)));
+
+    try {
+      await FirebaseFirestore.instance.runTransaction((txn) async {
+        final snap = await txn.get(ref);
+        final data = snap.data() ?? {};
+        final lastActiveDate = data['lastActiveDate'] as String?;
+
+        if (lastActiveDate == todayKey) return; // already counted today
+
+        final currentStreak = (data['streakCount'] as num?)?.toInt() ?? 0;
+        final longestStreak = (data['longestStreak'] as num?)?.toInt() ?? 0;
+        final newStreak = lastActiveDate == yesterdayKey ? currentStreak + 1 : 1;
+
+        txn.set(
+          ref,
+          {
+            'streakCount': newStreak,
+            'longestStreak': newStreak > longestStreak ? newStreak : longestStreak,
+            'lastActiveDate': todayKey,
+          },
+          SetOptions(merge: true),
+        );
+      });
     } catch (_) {
       // Non-critical stat; ignore failures rather than blocking the vote flow.
     }

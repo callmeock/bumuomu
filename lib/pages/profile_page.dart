@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/notification_service.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -13,8 +14,10 @@ class _ProfilePageState extends State<ProfilePage> {
   User? get user => FirebaseAuth.instance.currentUser;
   int _totalVotes = 0;
   int _unlockedCategories = 0;
+  int _streakCount = 0;
   bool _loading = true;
   String _displayName = '';
+  bool _notificationsEnabled = true;
 
   @override
   void initState() {
@@ -23,6 +26,18 @@ class _ProfilePageState extends State<ProfilePage> {
         ? (user!.displayName ?? '')
         : 'Anonim Kullanıcı';
     _loadStats();
+    _loadNotificationPreference();
+  }
+
+  Future<void> _loadNotificationPreference() async {
+    final enabled = await NotificationService.notificationsEnabled();
+    if (!mounted) return;
+    setState(() => _notificationsEnabled = enabled);
+  }
+
+  Future<void> _toggleNotifications(bool value) async {
+    setState(() => _notificationsEnabled = value);
+    await NotificationService.setNotificationsEnabled(value);
   }
 
   Future<void> _updateDisplayName(String newName) async {
@@ -64,6 +79,7 @@ class _ProfilePageState extends State<ProfilePage> {
       _unlockedCategories = unlocked?.length ?? 0;
 
       _totalVotes = (progressDoc.data()?['totalVotes'] as num?)?.toInt() ?? 0;
+      _streakCount = (progressDoc.data()?['streakCount'] as num?)?.toInt() ?? 0;
 
       setState(() => _loading = false);
     } catch (e) {
@@ -214,6 +230,15 @@ class _ProfilePageState extends State<ProfilePage> {
                             color: Colors.green,
                           ),
                         ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _StatCard(
+                            icon: Icons.local_fire_department,
+                            label: 'Gün Serisi',
+                            value: '$_streakCount',
+                            color: Colors.deepOrange,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 24),
@@ -226,13 +251,19 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    _SettingsTile(
-                      icon: Icons.notifications,
-                      title: 'Bildirimler',
-                      subtitle: 'Push bildirimleri açık',
-                      onTap: () {
-                        // TODO: Bildirim ayarları
-                      },
+                    Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: SwitchListTile(
+                        secondary: const Icon(Icons.notifications, color: Colors.orange),
+                        title: const Text('Bildirimler'),
+                        subtitle: Text(
+                          _notificationsEnabled
+                              ? 'Uygulama açıkken bildirimler gösteriliyor'
+                              : 'Uygulama açıkken bildirimler gizli',
+                        ),
+                        value: _notificationsEnabled,
+                        onChanged: _toggleNotifications,
+                      ),
                     ),
                     _SettingsTile(
                       icon: Icons.info,
