@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../main.dart';
 import '../services/vote_service.dart';
+import '../services/share_helper.dart';
 
 /// Quiz sayfası - Kategoriler ve Günün Quizi için
 class QuizPage extends StatefulWidget {
@@ -173,6 +174,12 @@ class _QuizPageState extends State<QuizPage> {
           '${widget.categoryName} kategorisindeki tüm soruları tamamladın!',
         ),
         actions: [
+          TextButton.icon(
+            onPressed: () =>
+                ShareHelper.shareQuizCompleted(categoryName: widget.categoryName),
+            icon: const Icon(Icons.share, size: 18),
+            label: const Text('Paylaş'),
+          ),
           TextButton(
             onPressed: () {
               Navigator.pop(context); // Dialog'u kapat

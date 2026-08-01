@@ -19,6 +19,7 @@ import 'services/analytics_session.dart';
 import 'services/analytics_helper.dart';
 import 'services/analytics_route_observer.dart';
 import 'services/unlock_ad_flow.dart';
+import 'services/share_helper.dart';
 import 'widgets/app_lifecycle_analytics.dart';
 import 'analytics/analytics_constants.dart';
 
@@ -1135,7 +1136,25 @@ class _TournamentPageState extends State<TournamentPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () => ShareHelper.shareTournamentWinner(
+                categoryName: widget.categoryName,
+                winner: winner,
+              ),
+              icon: const Icon(Icons.share),
+              label: const Text('Paylaş'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.black87,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                textStyle:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                shape: const StadiumBorder(),
+                side: const BorderSide(color: Colors.black54),
+              ),
+            ),
+            const SizedBox(height: 12),
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
               style: ElevatedButton.styleFrom(

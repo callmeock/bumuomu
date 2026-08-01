@@ -63,9 +63,7 @@ class _ProfilePageState extends State<ProfilePage> {
       final unlocked = progressDoc.data()?['unlockedCategories'] as List<dynamic>?;
       _unlockedCategories = unlocked?.length ?? 0;
 
-      // Total votes (approximate - votes collection'dan saymak gerekir)
-      // Şimdilik basit bir yaklaşım
-      _totalVotes = 0; // TODO: Gerçek oy sayısını hesapla
+      _totalVotes = (progressDoc.data()?['totalVotes'] as num?)?.toInt() ?? 0;
 
       setState(() => _loading = false);
     } catch (e) {
@@ -244,7 +242,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         showAboutDialog(
                           context: context,
                           applicationName: 'Bu mu O mu?',
-                          applicationVersion: '1.1.2',
+                          applicationVersion: '1.1.6',
                           applicationLegalese: '© 2025',
                         );
                       },

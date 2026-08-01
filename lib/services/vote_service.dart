@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
@@ -70,6 +71,25 @@ class VoteService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
     });
+
+    await incrementUserVoteCount();
+  }
+
+  /// Increment the current user's lifetime vote counter (user_progress.totalVotes)
+  /// Used by ProfilePage's "Toplam Oy" stat — separate from per-pair counts above.
+  static Future<void> incrementUserVoteCount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('user_progress')
+          .doc(user.uid)
+          .set({
+        'totalVotes': FieldValue.increment(1),
+      }, SetOptions(merge: true));
+    } catch (_) {
+      // Non-critical stat; ignore failures rather than blocking the vote flow.
+    }
   }
 
   /// Get vote counts for a pair (returns aCount and bCount)
