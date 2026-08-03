@@ -35,10 +35,19 @@ abstract class AnalyticsScreenNames {
   static const testQuiz = 'test_quiz';
   static const unlockSheet = 'unlock_sheet';
   static const categorySelection = 'category_selection';
+  static const soloHub = 'solo_hub';
+  static const dilemma = 'dilemma';
+  static const roomsHub = 'rooms_hub';
+  static const roomLobby = 'room_lobby';
+  static const roomPlay = 'room_play';
 }
 
 abstract class AnalyticsAdPlacement {
   static const categoryUnlock = 'category_unlock';
+  static const categoryComplete = 'category_complete';
+  static const roomComplete = 'room_complete';
+  static const unlimitedPeriodic = 'unlimited_periodic';
+  static const appOpenResume = 'app_open_resume';
 }
 
 /// Navigator / tab ile senkron: app lifecycle ve funnel [source_screen] için.

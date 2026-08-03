@@ -5,8 +5,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'analytics/analytics_constants.dart';
 import 'services/ad_service.dart';
 import 'main.dart';
+import 'theme/app_theme.dart';
 
 class UnlimitedModePage extends StatefulWidget {
   const UnlimitedModePage({super.key, this.analyticsSource = 'bottom_tab'});
@@ -44,6 +46,12 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
   Timer? _bannerRefreshTimer;
   bool _bannerReloadInFlight = false;
 
+  // Sonsuz oturumda doğal bir "bitiş" noktası olmadığından, periyodik ara
+  // olarak her N cevaplanan sorudan sonra bir interstitial gösteriyoruz
+  // (user feedback: agresif reklam stratejisi — Part A2.6).
+  int _answeredCount = 0;
+  static const int _interstitialEveryNQuestions = 12;
+
   /// Periyodik banner yenileme aralığı (manuel istek; politika için çok agresif yapmayın).
   static const Duration _bannerRefreshInterval = Duration(seconds: 30);
 
@@ -62,7 +70,7 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
   void dispose() {
     _bannerRefreshTimer?.cancel();
     _bannerRefreshTimer = null;
-    AdService.disposeBannerAd();
+    _bannerAd?.dispose();
     _bannerAd = null;
     super.dispose();
   }
@@ -79,10 +87,12 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
   void _reloadBannerAd() {
     if (!mounted || _bannerReloadInFlight) return;
     _bannerReloadInFlight = true;
+    final old = _bannerAd;
     setState(() {
       _bannerAd = null;
       _isBannerReady = false;
     });
+    old?.dispose();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         _bannerReloadInFlight = false;
@@ -339,6 +349,13 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
         _voting = false;
         _selectedIsA = null;
       });
+
+      _answeredCount++;
+      if (_answeredCount % _interstitialEveryNQuestions == 0) {
+        AdService.showInterstitialAd(
+          placement: AnalyticsAdPlacement.unlimitedPeriodic,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() { _voting = false; });
@@ -387,46 +404,17 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
 
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Sınırsız Mod'),
-          flexibleSpace: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  Color(0xFF3C26FF), // Sol mavi
-                  Color(0xFFFF0000), // Sağ kırmızı
-                ],
-              ),
-            ),
-          ),
-        ),
+        appBar: AppBar(title: const Text('Sınırsız Mod')),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Sınırsız Mod'),
-          flexibleSpace: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  Color(0xFF3C26FF), // Sol mavi
-                  Color(0xFFFF0000), // Sağ kırmızı
-                ],
-              ),
-            ),
-          ),
-        ),
+        appBar: AppBar(title: const Text('Sınırsız Mod')),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -451,49 +439,64 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
 
     if (_current == null) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Sınırsız Mod'),
-          flexibleSpace: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  Color(0xFF3C26FF), // Sol mavi
-                  Color(0xFFFF0000), // Sağ kırmızı
-                ],
-              ),
-            ),
-          ),
-        ),
+        appBar: AppBar(title: const Text('Sınırsız Mod')),
         body: const Center(child: Text('Soru bulunamadı.')),
       );
     }
 
     final q = _current!;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sınırsız Mod'),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [
-                Color(0xFF3C26FF), // Sol mavi
-                Color(0xFFFF0000), // Sağ kırmızı
-              ],
-            ),
-          ),
-        ),
-      ),
       body: SafeArea(
         child: Column(
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).maybePop(),
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: const BoxDecoration(
+                        color: AppColors.night2,
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.arrow_back_ios_new,
+                          size: 16, color: AppColors.cloud),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: AppColors.night2,
+                      borderRadius: BorderRadius.circular(AppRadii.pill),
+                    ),
+                    child: const Text('♾️ Sınırsız Mod',
+                        style: TextStyle(
+                          color: AppColors.cloud,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        )),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: _voting ? null : _skip,
+                    icon: const Icon(Icons.skip_next, size: 18, color: AppColors.mist),
+                    label: const Text('Geç',
+                        style: TextStyle(color: AppColors.mist, fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+            ),
             // Ana içerik
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 250),
                   transitionBuilder: (child, anim) =>
@@ -508,7 +511,6 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
                     selectedIsA: _selectedIsA,
                     onVoteA: () => _vote(true),
                     onVoteB: () => _vote(false),
-                    onSkip: _skip,
                   ),
                 ),
               ),
@@ -558,7 +560,6 @@ class _QuestionCard extends StatelessWidget {
   final bool? selectedIsA; // true = A seçildi, false = B seçildi, null = henüz seçilmedi
   final VoidCallback onVoteA;
   final VoidCallback onVoteB;
-  final VoidCallback onSkip;
 
   const _QuestionCard({
     Key? key,
@@ -570,65 +571,50 @@ class _QuestionCard extends StatelessWidget {
     this.selectedIsA,
     required this.onVoteA,
     required this.onVoteB,
-    required this.onSkip,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final bg = Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.25);
-
     return Column(
       key: key,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Soru metni
         Text(
           data.question,
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
+          style: const TextStyle(
+            color: AppColors.cloud,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+          ),
         ),
-        const SizedBox(height: 16),
-
-        // A seçeneği
+        const SizedBox(height: AppSpacing.lg),
         Expanded(
           child: _ChoiceTile(
             label: data.optionA,
             imageUrl: data.imageA,
+            accent: AppColors.violet,
             onTap: votingLocked ? null : onVoteA,
-            bgColor: bg,
             showResults: showResults,
             pct: pctA,
             isSelected: selectedIsA == true,
-            isOpponentSelected: selectedIsA == false,
             questionId: data.id,
             isOptionA: true,
           ),
         ),
-        const SizedBox(height: 12),
-
-        // B seçeneği
+        const SizedBox(height: AppSpacing.md),
         Expanded(
           child: _ChoiceTile(
             label: data.optionB,
             imageUrl: data.imageB,
+            accent: AppColors.coral,
             onTap: votingLocked ? null : onVoteB,
-            bgColor: bg,
             showResults: showResults,
             pct: pctB,
             isSelected: selectedIsA == false,
-            isOpponentSelected: selectedIsA == true,
             questionId: data.id,
             isOptionA: false,
           ),
-        ),
-
-        const SizedBox(height: 12),
-        TextButton.icon(
-          onPressed: votingLocked ? null : onSkip,
-          icon: const Icon(Icons.skip_next),
-          label: const Text('Geç / Karıştır'),
         ),
       ],
     );
@@ -638,12 +624,11 @@ class _QuestionCard extends StatelessWidget {
 class _ChoiceTile extends StatelessWidget {
   final String label;
   final String? imageUrl;
+  final Color accent;
   final VoidCallback? onTap;
-  final Color bgColor;
   final bool showResults;
   final int? pct;
   final bool isSelected; // Bu seçenek seçildi mi?
-  final bool isOpponentSelected; // Diğer seçenek seçildi mi?
   final String questionId;
   final bool isOptionA; // Bu seçenek A mı B mi?
 
@@ -651,135 +636,130 @@ class _ChoiceTile extends StatelessWidget {
     Key? key,
     required this.label,
     required this.imageUrl,
+    required this.accent,
     required this.onTap,
-    required this.bgColor,
     required this.showResults,
     required this.pct,
     required this.isSelected,
-    required this.isOpponentSelected,
     required this.questionId,
     required this.isOptionA,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    // Overlay yoğunluğu: seçilmeyen kart = koyu (0.80), seçilen kart = açık (0.05)
-    final double overlayOpacity = showResults
-        ? (isSelected ? 0.05 : (isOpponentSelected ? 0.80 : 0.0))
-        : 0.0;
+    final double overlayOpacity = showResults && !isSelected ? 0.55 : 0.0;
 
     return InkWell(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadii.xl),
       onTap: onTap,
       child: Ink(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: bgColor,
-          border: Border.all(
-            color: Colors.black.withOpacity(0.15),
-            width: 1,
-          ),
+          borderRadius: BorderRadius.circular(AppRadii.xl),
+          color: AppColors.night2,
           image: (imageUrl != null && imageUrl!.isNotEmpty)
               ? DecorationImage(
                   image: CachedNetworkImageProvider(imageUrl!),
                   fit: BoxFit.cover,
                   colorFilter: ColorFilter.mode(
-                    Colors.black.withOpacity(0.35),
+                    Colors.black.withValues(alpha: 0.35),
                     BlendMode.darken,
                   ),
                 )
               : null,
         ),
         child: Stack(
+          fit: StackFit.expand,
           children: [
-            // Ana içerik
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    shadows: [
-                      Shadow(
-                        blurRadius: 6,
-                        color: Colors.black,
-                        offset: Offset(1, 1),
-                      )
-                    ],
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.55)],
                   ),
                 ),
               ),
             ),
-
-            // Overlay efekti (kategorilerdeki gibi)
             if (overlayOpacity > 0)
-              Positioned.fill(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: IgnorePointer(
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      color: Colors.black.withOpacity(overlayOpacity),
-                    ),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                color: Colors.black.withValues(alpha: overlayOpacity),
+              ),
+            Positioned(
+              top: AppSpacing.md,
+              left: AppSpacing.md,
+              child: Container(
+                width: 6,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(AppRadii.pill),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.center,
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.cloud,
                   ),
                 ),
               ),
-
-            // Yüzdelik yazısı - ORTADA (kategorilerdeki gibi)
+            ),
             if (showResults && pct != null)
-              StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                stream: FirebaseFirestore.instance
-                    .collection('unlimited_polls')
-                    .doc(questionId)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData || !snapshot.data!.exists) {
-                    return const SizedBox.shrink();
-                  }
-                  final data = snapshot.data!.data()!;
-                  final aCount = (data['aCount'] ?? 0) as int;
-                  final bCount = (data['bCount'] ?? 0) as int;
-                  final total = aCount + bCount;
-                  if (total == 0) return const SizedBox.shrink();
+              Positioned(
+                left: AppSpacing.lg,
+                right: AppSpacing.lg,
+                bottom: AppSpacing.md,
+                child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('unlimited_polls')
+                      .doc(questionId)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData || !snapshot.data!.exists) {
+                      return const SizedBox.shrink();
+                    }
+                    final data = snapshot.data!.data()!;
+                    final aCount = (data['aCount'] ?? 0) as int;
+                    final bCount = (data['bCount'] ?? 0) as int;
+                    final total = aCount + bCount;
+                    if (total == 0) return const SizedBox.shrink();
 
-                  final thisPct = pct!;
-                  
-                  // Renkler: eşitse mavi, kazanan yeşil (#008000), kaybeden kırmızı
-                  Color textColor;
-                  if (aCount == bCount) {
-                    textColor = Colors.blue;
-                  } else {
-                    // Bu seçenek A mı B mi?
-                    final thisCount = isOptionA ? aCount : bCount;
-                    final oppCount = isOptionA ? bCount : aCount;
-                    textColor = (thisCount > oppCount)
-                        ? const Color(0xFF008000)
-                        : Colors.red;
-                  }
-
-                  return Center(
-                    child: Text(
-                      "%$thisPct",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 44,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                        shadows: const [
-                          Shadow(
-                            blurRadius: 6,
-                            color: Colors.black,
-                            offset: Offset(2, 2),
-                          )
-                        ],
-                      ),
-                    ),
-                  );
-                },
+                    final thisPct = pct!;
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(AppRadii.pill),
+                            child: LinearProgressIndicator(
+                              value: thisPct / 100,
+                              minHeight: 8,
+                              backgroundColor: AppColors.cloud.withValues(alpha: 0.12),
+                              valueColor: AlwaysStoppedAnimation(accent),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Text(
+                          '%$thisPct',
+                          style: const TextStyle(
+                            color: AppColors.cloud,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
           ],
         ),

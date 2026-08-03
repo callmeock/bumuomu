@@ -5,12 +5,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../main.dart';
 import '../analytics/analytics_constants.dart';
-import '../services/unlock_ad_flow.dart';
 import '../models/category.dart';
+import '../theme/app_theme.dart';
 import 'quiz_page.dart';
 import 'test_page.dart';
 
 /// Günün Quizi sayfası - Günlük quiz kategorisi; yoksa Favorin Hangisi'nden rastgele biri
+///
+/// Artık kilitli değil (kullanıcı isteği: reklam bir kategori/oyun bitince
+/// otomatik gösteriliyor — bkz. CompletionAdFlow, izlenen ekranlarda tetiklenir).
 class DailyQuizPage extends StatefulWidget {
   const DailyQuizPage({super.key});
 
@@ -40,15 +43,13 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
   _DailyFallbackItem? _dailyFallback;
   bool _loading = true;
   String? _error;
-  bool _unlocked = false;
-  bool _loadingUnlocked = true;
   int _streakCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadDailyQuiz();
-    _loadUnlockedStatus();
+    _loadStreak();
   }
 
   Future<void> _loadDailyQuiz() async {
@@ -58,17 +59,24 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
         _error = null;
       });
 
-      // Prefer categories created within last 24 hours (any mode)
+      // Prefer categories created within last 24 hours (any mode).
+      // Sadece Soru'nun 'dilemma' tipi kategorileri Günün Quizi'nde
+      // görünmemeli (kullanıcı isteği) — bu ekran resim tabanlı DuelVoteCard
+      // kullanıyor, dilemma içeriği kendi tam ekran modunda kalmalı. Firestore
+      // tarafında type== + createdAt orderBy birleşimi composite index
+      // gerektirebileceğinden (ve bu index'in var olduğu garanti değil),
+      // sunucu tarafında filtrelemek yerine birkaç sonuç çekip ilk
+      // dilemma-olmayanı client-side seçiyoruz.
       final now = DateTime.now();
       final yesterday = now.subtract(const Duration(hours: 24));
-      
+
       QuerySnapshot? snapshot;
       try {
         snapshot = await FirebaseFirestore.instance
             .collection('categories')
             .where('createdAt', isGreaterThan: Timestamp.fromDate(yesterday))
             .orderBy('createdAt', descending: true)
-            .limit(1)
+            .limit(10)
             .get();
       } catch (e) {
         // Index might not exist yet, fallback to simple query
@@ -76,10 +84,10 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
         snapshot = null;
       }
 
-      if (snapshot != null && snapshot.docs.isNotEmpty) {
-        final doc = snapshot.docs.first;
+      final picked = _firstNonDilemma(snapshot);
+      if (picked != null) {
         try {
-          final category = Category.fromFirestore(doc);
+          final category = Category.fromFirestore(picked);
           if (!mounted) return;
           setState(() {
             _dailyQuiz = category;
@@ -98,17 +106,17 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
         fallbackSnapshot = await FirebaseFirestore.instance
             .collection('categories')
             .orderBy('createdAt', descending: true)
-            .limit(1)
+            .limit(10)
             .get();
       } catch (e) {
         debugPrint('Fallback createdAt query failed (index?): $e');
         fallbackSnapshot = null;
       }
 
-      if (fallbackSnapshot != null && fallbackSnapshot.docs.isNotEmpty) {
-        final doc = fallbackSnapshot.docs.first;
+      final pickedFallback = _firstNonDilemma(fallbackSnapshot);
+      if (pickedFallback != null) {
         try {
-          final category = Category.fromFirestore(doc);
+          final category = Category.fromFirestore(pickedFallback);
           if (!mounted) return;
           setState(() {
             _dailyQuiz = category;
@@ -136,6 +144,17 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
         _loading = false;
       });
     }
+  }
+
+  /// Verilen snapshot'taki dokümanlar arasından ilk `type != 'dilemma'` olanı
+  /// döner (Sadece Soru içeriği Günün Quizi'nde çıkmasın diye).
+  QueryDocumentSnapshot? _firstNonDilemma(QuerySnapshot? snapshot) {
+    if (snapshot == null) return null;
+    for (final doc in snapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data?['type'] != 'dilemma') return doc;
+    }
+    return null;
   }
 
   /// Favorin Hangisi kaynaklarından (tournament + categories_test) rastgele bir kategori seç
@@ -199,41 +218,20 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
     }
   }
 
-  Future<void> _loadUnlockedStatus() async {
+  Future<void> _loadStreak() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() {
-          _unlocked = false;
-          _loadingUnlocked = false;
-        });
-        return;
-      }
-
-      // Get today's date in local timezone (TR) as YYYY-MM-DD
-      final today = DateTime.now();
-      final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-
       final doc = await FirebaseFirestore.instance
           .collection('user_progress')
           .doc(user.uid)
           .get();
-
-      final data = doc.data();
-      final dailyUnlocks = data?['dailyUnlocks'] as Map<String, dynamic>? ?? {};
-
       if (!mounted) return;
       setState(() {
-        _unlocked = dailyUnlocks[todayStr] == true;
-        _streakCount = (data?['streakCount'] as num?)?.toInt() ?? 0;
-        _loadingUnlocked = false;
+        _streakCount = (doc.data()?['streakCount'] as num?)?.toInt() ?? 0;
       });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _unlocked = false;
-        _loadingUnlocked = false;
-      });
+    } catch (_) {
+      // Non-critical UI decoration; ignore failures.
     }
   }
 
@@ -348,87 +346,21 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
     }
   }
 
-  Future<void> _unlockDailyQuiz() async {
-    if (!mounted) return;
-    try {
-      final watched = await UnlockAdFlow.showRewardedForCategory(
-        context,
-        categoryKey: _dailyQuiz?.id ?? 'daily_quiz',
-        categoryName: _dailyQuiz?.name ?? 'Günün Quizi',
-      );
-      if (!mounted) return;
-      if (watched) {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          final today = DateTime.now();
-          final todayStr =
-              '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-
-          await FirebaseFirestore.instance
-              .collection('user_progress')
-              .doc(user.uid)
-              .set({
-            'dailyUnlocks': {
-              todayStr: true,
-            },
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-
-          await AnalyticsHelper.categoryUnlocked(
-            categoryKey: _dailyQuiz?.id ?? 'daily_quiz',
-            categoryName: _dailyQuiz?.name ?? 'Günün Quizi',
-            method: 'rewarded_interstitial',
-            gameMode: 'quiz',
-          );
-
-          setState(() {
-            _unlocked = true;
-          });
-
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Günün quiz\'i açıldı!'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Reklam izlenemedi. Lütfen tekrar deneyin.'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Hata: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Günün Quizi'),
         actions: [
-          if (!_loadingUnlocked && _streakCount > 0)
+          if (_streakCount > 0)
             Padding(
               padding: const EdgeInsets.only(right: 16.0),
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(999),
+                    color: AppColors.yellow,
+                    borderRadius: BorderRadius.circular(AppRadii.pill),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -438,7 +370,7 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
                       Text(
                         '$_streakCount gün',
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: Color(0xFF3B2400),
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
                         ),
@@ -449,18 +381,6 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
               ),
             ),
         ],
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [
-                Color(0xFF3C26FF), // Sol mavi
-                Color(0xFFFF0000), // Sağ kırmızı
-              ],
-            ),
-          ),
-        ),
       ),
       body: _loading
           ? const Center(
@@ -469,7 +389,7 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(height: 16),
-                  Text('Yükleniyor...', style: TextStyle(color: Colors.grey)),
+                  Text('Yükleniyor...', style: TextStyle(color: AppColors.mist)),
                 ],
               ),
             )
@@ -480,11 +400,12 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error_outline, size: 48),
+                        const Icon(Icons.error_outline, size: 48, color: AppColors.mist),
                         const SizedBox(height: 12),
                         Text(
                           _error!,
                           textAlign: TextAlign.center,
+                          style: const TextStyle(color: AppColors.mist),
                         ),
                         const SizedBox(height: 16),
                         ElevatedButton.icon(
@@ -504,25 +425,22 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.quiz, size: 72, color: Colors.grey[600]),
+                            const Icon(Icons.quiz, size: 72, color: AppColors.mistDim),
                             const SizedBox(height: 20),
-                            Text(
+                            const Text(
                               'Bugün için quiz henüz hazır değil',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 18,
-                                color: Colors.grey[800],
-                                fontWeight: FontWeight.w500,
+                                color: AppColors.cloud,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             const SizedBox(height: 8),
-                            Text(
+                            const Text(
                               'Yarın tekrar kontrol et veya aşağıdan yenile.',
                               textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
+                              style: TextStyle(fontSize: 14, color: AppColors.mist),
                             ),
                           ],
                         ),
@@ -540,8 +458,6 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
                               name: _dailyQuiz?.name ?? _dailyFallback!.name,
                               image: _dailyQuiz?.image ?? _dailyFallback!.image,
                               itemCount: _dailyQuiz?.items.length ?? _dailyFallback!.items.length,
-                              unlocked: _unlocked,
-                              onUnlock: _unlockDailyQuiz,
                               onPlay: _dailyQuiz != null
                                   ? () => _playDailyQuiz()
                                   : () => _playDailyFallback(),
@@ -558,16 +474,12 @@ class _DailyQuizCard extends StatelessWidget {
   final String name;
   final String image;
   final int itemCount;
-  final bool unlocked;
-  final VoidCallback onUnlock;
   final VoidCallback onPlay;
 
   const _DailyQuizCard({
     required this.name,
     required this.image,
     required this.itemCount,
-    required this.unlocked,
-    required this.onUnlock,
     required this.onPlay,
   });
 
@@ -575,9 +487,9 @@ class _DailyQuizCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final questionCount = itemCount ~/ 2;
     return Card(
-      elevation: 4,
+      elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadii.lg),
       ),
       clipBehavior: Clip.antiAlias,
       child: SizedBox(
@@ -587,86 +499,68 @@ class _DailyQuizCard extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (image.isNotEmpty)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: ColorFiltered(
-                  colorFilter: ColorFilter.mode(
-                    Colors.black.withOpacity(0.5),
-                    BlendMode.darken,
-                  ),
-                  child: CachedNetworkImage(
-                    imageUrl: image,
-                    fit: BoxFit.cover,
-                    height: 240,
-                    width: double.infinity,
-                  ),
+              ColorFiltered(
+                colorFilter: ColorFilter.mode(
+                  Colors.black.withValues(alpha: 0.5),
+                  BlendMode.darken,
                 ),
-              ),
+                child: CachedNetworkImage(
+                  imageUrl: image,
+                  fit: BoxFit.cover,
+                  height: 240,
+                  width: double.infinity,
+                  errorWidget: (context, url, error) =>
+                      const ColoredBox(color: AppColors.night2),
+                ),
+              )
+            else
+              const ColoredBox(color: AppColors.night2),
             Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.7),
-                  ],
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black87],
+                  ),
                 ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.quiz,
-                          size: 20,
-                          color: Colors.purpleAccent,
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          color: AppColors.cloud,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '$questionCount soru',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 16,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.quiz, size: 18, color: AppColors.violet),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$questionCount soru',
+                            style: const TextStyle(color: AppColors.mist, fontSize: 14),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: unlocked ? onPlay : onUnlock,
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Başla'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: unlocked ? Colors.green : Colors.purple,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: onPlay,
+                        icon: const Icon(Icons.play_arrow),
+                        label: const Text('Başla'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );

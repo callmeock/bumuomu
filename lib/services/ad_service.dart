@@ -3,16 +3,22 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../ad_units.dart';
 import 'analytics_helper.dart';
+import 'subscription_service.dart';
 
 /// AdMob: kategori açmak için **ödüllü geçiş (Rewarded Interstitial)** reklamı.
 class AdService {
+  /// Reklamlar sadece premium olmayan kullanıcılara gösterilir — haftalık
+  /// abonelik ([SubscriptionService.isPremium]) satın alınca tüm reklam
+  /// çağrıları (banner/rewarded/interstitial/app open) sessizce atlanır.
+  static bool get adsEnabled => !SubscriptionService.isPremium;
+
   static RewardedInterstitialAd? _rewardedInterstitialAd;
   static bool _isCategoryUnlockAdReady = false;
   static Future<void>? _rewardedLoadFuture;
 
-  /// Banner Ad
-  static BannerAd? _bannerAd;
-  static bool _isBannerReady = false;
+  static InterstitialAd? _interstitialAd;
+  static bool _isInterstitialReady = false;
+  static Future<void>? _interstitialLoadFuture;
 
   static void _log(String message) {
     // Release dahil cihaz loglarında görünsün (Xcode / logcat).
@@ -26,8 +32,15 @@ class AdService {
   static String get _categoryUnlockAdUnitId =>
       AdMobAdUnits.rewardedInterstitial(useTestAds: kDebugMode);
 
+  static String get _interstitialAdUnitId =>
+      AdMobAdUnits.interstitial(useTestAds: kDebugMode);
+
   /// Ödüllü geçiş reklamını önceden yükle (kategori açma).
   static Future<void> loadRewardedInterstitialAd() async {
+    if (!adsEnabled) {
+      _log('rewarded_interstitial load SKIPPED (adsEnabled=false)');
+      return;
+    }
     if (_isCategoryUnlockAdReady && _rewardedInterstitialAd != null) {
       _log('rewarded_interstitial load skipped (already loaded)');
       return;
@@ -87,6 +100,10 @@ class AdService {
     String placement = 'unknown',
     String adType = 'rewarded_interstitial',
   }) async {
+    if (!adsEnabled) {
+      _log('rewarded_interstitial show SKIPPED (adsEnabled=false)');
+      return false;
+    }
     if (!_isCategoryUnlockAdReady || _rewardedInterstitialAd == null) {
       await loadRewardedInterstitialAd();
       if (!_isCategoryUnlockAdReady || _rewardedInterstitialAd == null) {
@@ -172,42 +189,45 @@ class AdService {
   /// Kategori kilidi reklamı hazır mı (isteğe bağlı kontrol).
   static bool get isCategoryUnlockAdReady => _isCategoryUnlockAdReady;
 
-  /// Uygulama açılışında kategori kilidi reklamını önceden yükle.
+  /// Uygulama açılışında kategori kilidi ve interstitial reklamlarını
+  /// önceden yükle.
   static Future<void> initialize() async {
     await loadRewardedInterstitialAd();
+    await loadInterstitialAd();
   }
 
-  /// Banner ad yükle.
-  /// [forceNewLoad]: mevcut banner'ı dispose edip yeni istek atar (ör. periyodik yenileme).
+  /// Banner ad yükle. Her çağrı kendi bağımsız `BannerAd` örneğini oluşturur
+  /// (paylaşılan static state yok) — birden fazla ekran (ör. alt nav'daki
+  /// kalıcı banner + Sınırsız Mod'un kendi banner'ı) aynı anda bağımsız
+  /// banner tutabilsin diye; tek paylaşılan örnek olsaydı biri dispose
+  /// ettiğinde diğerinin elindeki referans da native tarafta ölmüş olurdu.
+  /// [forceNewLoad] artık no-op — geriye dönük uyumluluk için parametre
+  /// olarak duruyor, çağıran taraflar değiştirilmeden çalışmaya devam etsin.
   static Future<void> loadBannerAd({
     required AdSize adSize,
     required Function(BannerAd) onAdLoaded,
     required Function(LoadAdError) onAdFailedToLoad,
     bool forceNewLoad = false,
   }) async {
-    if (forceNewLoad) {
-      disposeBannerAd();
-    } else if (_isBannerReady && _bannerAd != null) {
-      onAdLoaded(_bannerAd!);
+    if (!adsEnabled) {
+      _log('banner load SKIPPED (adsEnabled=false)');
+      onAdFailedToLoad(LoadAdError(-1, 'ads_disabled', 'adsEnabled=false', null));
       return;
     }
-
     try {
       final adUnitId = _bannerAdUnitId;
       _log('banner load START | unit=$adUnitId | test=$kDebugMode');
 
-      _bannerAd = BannerAd(
+      final bannerAd = BannerAd(
         adUnitId: adUnitId,
         size: adSize,
         request: const AdRequest(),
         listener: BannerAdListener(
           onAdLoaded: (ad) {
-            _isBannerReady = true;
             _log('banner load SUCCESS | unit=$adUnitId');
             onAdLoaded(ad as BannerAd);
           },
           onAdFailedToLoad: (ad, error) {
-            _isBannerReady = false;
             _log(
               'banner load FAIL | unit=$adUnitId | '
               'code=${error.code} | ${error.message}',
@@ -224,7 +244,7 @@ class AdService {
         ),
       );
 
-      await _bannerAd!.load();
+      await bannerAd.load();
     } catch (e) {
       _log('banner load EXCEPTION | $e');
       onAdFailedToLoad(LoadAdError(
@@ -236,10 +256,86 @@ class AdService {
     }
   }
 
-  /// Banner ad dispose et
-  static void disposeBannerAd() {
-    _bannerAd?.dispose();
-    _bannerAd = null;
-    _isBannerReady = false;
+  /// Interstitial önceden yükle (Sınırsız Mod periyodik ara).
+  static Future<void> loadInterstitialAd() async {
+    if (!adsEnabled) {
+      _log('interstitial load SKIPPED (adsEnabled=false)');
+      return;
+    }
+    if (_isInterstitialReady && _interstitialAd != null) {
+      _log('interstitial load skipped (already loaded)');
+      return;
+    }
+    if (_interstitialLoadFuture != null) {
+      await _interstitialLoadFuture;
+      return;
+    }
+    _interstitialLoadFuture = _performInterstitialLoad();
+    try {
+      await _interstitialLoadFuture;
+    } finally {
+      _interstitialLoadFuture = null;
+    }
+  }
+
+  static Future<void> _performInterstitialLoad() async {
+    final unitId = _interstitialAdUnitId;
+    try {
+      await InterstitialAd.load(
+        adUnitId: unitId,
+        request: const AdRequest(),
+        adLoadCallback: InterstitialAdLoadCallback(
+          onAdLoaded: (ad) {
+            _interstitialAd = ad;
+            _isInterstitialReady = true;
+            _log('interstitial load SUCCESS | unit=$unitId');
+          },
+          onAdFailedToLoad: (error) {
+            _isInterstitialReady = false;
+            _log('interstitial load FAIL | unit=$unitId | ${error.message}');
+          },
+        ),
+      );
+    } catch (e, st) {
+      _isInterstitialReady = false;
+      _log('interstitial load EXCEPTION | $e | $st');
+    }
+  }
+
+  /// Interstitial'ı göster (best-effort — yüklenmemişse sessizce atlar).
+  static Future<void> showInterstitialAd({
+    String placement = 'unknown',
+    String adType = 'interstitial',
+  }) async {
+    if (!adsEnabled) {
+      _log('interstitial show SKIPPED (adsEnabled=false)');
+      return;
+    }
+    if (!_isInterstitialReady || _interstitialAd == null) {
+      _log('interstitial show ABORT (not loaded) | placement=$placement');
+      loadInterstitialAd();
+      return;
+    }
+
+    await AnalyticsHelper.adOpened(placement: placement, adType: adType);
+
+    _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (ad) {
+        AnalyticsHelper.adClosed(placement: placement, adType: adType, rewardEarned: false);
+        ad.dispose();
+        _interstitialAd = null;
+        _isInterstitialReady = false;
+        loadInterstitialAd();
+      },
+      onAdFailedToShowFullScreenContent: (ad, error) {
+        AnalyticsHelper.adClosed(placement: placement, adType: adType, rewardEarned: false);
+        ad.dispose();
+        _interstitialAd = null;
+        _isInterstitialReady = false;
+        loadInterstitialAd();
+      },
+    );
+
+    await _interstitialAd!.show();
   }
 }
