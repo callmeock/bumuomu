@@ -5,6 +5,7 @@ import '../services/vote_service.dart';
 import '../services/share_helper.dart';
 import '../services/completion_ad_flow.dart';
 import '../theme/app_theme.dart';
+import '../utils/image_url.dart';
 import '../widgets/duel_card.dart';
 import '../widgets/result_share_row.dart';
 
@@ -61,6 +62,7 @@ class _QuizPageState extends State<QuizPage> {
         _descriptions = data;
         _loadingDescriptions = false;
       });
+      _precacheNextQuestion();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -69,9 +71,9 @@ class _QuizPageState extends State<QuizPage> {
     }
   }
 
-  Map<String, dynamic>? get _currentQuestion {
-    if (_currentQuestionIndex >= widget.questions.length) return null;
-    final q = widget.questions[_currentQuestionIndex];
+  Map<String, dynamic>? _questionAt(int index) {
+    if (index < 0 || index >= widget.questions.length) return null;
+    final q = widget.questions[index];
     if (q is Map<String, dynamic>) {
       return q;
     }
@@ -81,8 +83,9 @@ class _QuizPageState extends State<QuizPage> {
     return null;
   }
 
-  List<String> get _currentOptions {
-    final q = _currentQuestion;
+  Map<String, dynamic>? get _currentQuestion => _questionAt(_currentQuestionIndex);
+
+  List<String> _optionsFor(Map<String, dynamic>? q) {
     if (q == null) return [];
 
     final optionA = q['itemA'] ??
@@ -104,6 +107,19 @@ class _QuizPageState extends State<QuizPage> {
     }
 
     return [optionA.toString(), optionB.toString()];
+  }
+
+  List<String> get _currentOptions => _optionsFor(_currentQuestion);
+
+  /// Kullanıcı mevcut soruya bakarken bir sonraki sorunun görsellerini
+  /// arka planda indirip önbelleğe alır.
+  void _precacheNextQuestion() {
+    if (!mounted || _descriptions.isEmpty) return;
+    final nextOptions = _optionsFor(_questionAt(_currentQuestionIndex + 1));
+    if (nextOptions.length != 2) return;
+    for (final name in nextOptions) {
+      precacheSafeImage(context, _descriptions[name]?['image'] as String?);
+    }
   }
 
   Future<void> _handleVote(int index) async {
@@ -149,6 +165,7 @@ class _QuizPageState extends State<QuizPage> {
           _hasVoted = false;
           _selectedIndex = null;
         });
+        _precacheNextQuestion();
       }
     });
   }

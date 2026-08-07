@@ -7,6 +7,7 @@ import '../analytics/analytics_constants.dart';
 import '../services/ad_service.dart';
 import '../services/room_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/image_url.dart';
 import '../widgets/banner_ad_slot.dart';
 import '../widgets/room_avatar_row.dart';
 
@@ -32,6 +33,7 @@ class _RoomPlayPageState extends State<RoomPlayPage> {
 
   Timer? _ticker;
   int? _advancedForIndex;
+  int? _precachedForIndex;
   bool _endAdTriggered = false;
 
   @override
@@ -113,6 +115,21 @@ class _RoomPlayPageState extends State<RoomPlayPage> {
           }
 
           final pair = pairs[currentIndex];
+
+          // Kullanıcı mevcut çifte bakarken bir sonraki çiftin görsellerini
+          // arka planda indirir — böylece oraya geçince spinner görünmez.
+          if (_precachedForIndex != currentIndex) {
+            _precachedForIndex = currentIndex;
+            final nextIndex = currentIndex + 1;
+            if (nextIndex < pairs.length) {
+              final nextPair = pairs[nextIndex];
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                precacheSafeImage(context, nextPair['imageA']);
+                precacheSafeImage(context, nextPair['imageB']);
+              });
+            }
+          }
 
           return SafeArea(
             child: StreamBuilder(
@@ -274,7 +291,7 @@ class _RoomChoiceCard extends StatelessWidget {
               children: [
                 if (imageUrl.isNotEmpty)
                   CachedNetworkImage(
-                    imageUrl: imageUrl,
+                    imageUrl: safeImageUrl(imageUrl),
                     fit: BoxFit.cover,
                     errorWidget: (context, url, error) => const ColoredBox(color: AppColors.night2),
                   ),

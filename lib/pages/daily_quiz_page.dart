@@ -7,6 +7,7 @@ import '../main.dart';
 import '../analytics/analytics_constants.dart';
 import '../models/category.dart';
 import '../theme/app_theme.dart';
+import '../utils/image_url.dart';
 import 'quiz_page.dart';
 import 'test_page.dart';
 
@@ -505,7 +506,7 @@ class _DailyQuizCard extends StatelessWidget {
                   BlendMode.darken,
                 ),
                 child: CachedNetworkImage(
-                  imageUrl: image,
+                  imageUrl: safeImageUrl(image),
                   fit: BoxFit.cover,
                   height: 240,
                   width: double.infinity,

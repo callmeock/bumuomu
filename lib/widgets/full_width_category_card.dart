@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../theme/app_theme.dart';
+import '../utils/image_url.dart';
 
 /// Full-width category card using the category's real Firestore `image` as
 /// background (pre-rebuild behavior, restored per user feedback — falls back
@@ -38,7 +39,7 @@ class FullWidthCategoryCard extends StatelessWidget {
             children: [
               if (imageUrl.isNotEmpty)
                 CachedNetworkImage(
-                  imageUrl: imageUrl,
+                  imageUrl: safeImageUrl(imageUrl),
                   fit: BoxFit.cover,
                   placeholder: (context, url) => const ColoredBox(color: AppColors.night2),
                   errorWidget: (context, url, error) =>

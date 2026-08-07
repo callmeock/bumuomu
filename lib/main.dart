@@ -21,6 +21,7 @@ import 'services/analytics_route_observer.dart';
 import 'services/share_helper.dart';
 import 'services/completion_ad_flow.dart';
 import 'theme/app_theme.dart';
+import 'utils/image_url.dart';
 import 'widgets/app_lifecycle_analytics.dart';
 import 'widgets/duel_card.dart';
 import 'widgets/result_share_row.dart';
@@ -241,6 +242,7 @@ class _TournamentPageState extends State<TournamentPage> {
     };
     if (!mounted) return;
     setState(() => descriptions = data);
+    _precacheUpcomingPair();
   }
 
   Future<void> _loadStreak() async {
@@ -282,6 +284,22 @@ class _TournamentPageState extends State<TournamentPage> {
     setState(() {
       options = [currentRound[currentIndex], currentRound[currentIndex + 1]];
     });
+    _precacheUpcomingPair();
+  }
+
+  /// Kullanıcı mevcut eşleşmeye bakarken, aynı round içindeki bir sonraki
+  /// eşleşmenin görsellerini arka planda indirmeye başlar — böylece oraya
+  /// geçtiğinde spinner görünmez. Yeni round'un eşleşmesi kazanana bağlı
+  /// olduğundan önceden bilinemez, bu yüzden sadece aynı round'a bakılır.
+  void _precacheUpcomingPair() {
+    if (!mounted || descriptions.isEmpty) return;
+    final nextA = currentIndex + 2;
+    final nextB = currentIndex + 3;
+    if (nextB >= currentRound.length) return;
+    precacheSafeImage(
+        context, descriptions[currentRound[nextA]]?['image'] as String?);
+    precacheSafeImage(
+        context, descriptions[currentRound[nextB]]?['image'] as String?);
   }
 
   Future<void> _handleVote(int index) async {
@@ -363,7 +381,7 @@ class _TournamentPageState extends State<TournamentPage> {
               borderRadius: BorderRadius.circular(AppRadii.xl),
               child: imageUrl.isNotEmpty
                   ? CachedNetworkImage(
-                      imageUrl: imageUrl,
+                      imageUrl: safeImageUrl(imageUrl),
                       placeholder: (context, url) => const SizedBox(
                         height: 240,
                         child: Center(child: CircularProgressIndicator()),

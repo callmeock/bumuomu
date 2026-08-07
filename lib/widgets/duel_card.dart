@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../theme/app_theme.dart';
 import '../services/vote_service.dart';
+import '../utils/image_url.dart';
 
 /// Top bar shown above a duel: back button, category pill, streak chip and
 /// an optional round-progress track (e.g. "3. tur" in a tournament).
@@ -279,7 +280,7 @@ class _DuelVoteCardState extends State<DuelVoteCard> {
       );
     }
     return CachedNetworkImage(
-      imageUrl: widget.imageUrl,
+      imageUrl: safeImageUrl(widget.imageUrl),
       fit: BoxFit.cover,
       placeholder: (context, url) => const Center(
         child: CircularProgressIndicator(strokeWidth: 2),

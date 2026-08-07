@@ -21,6 +21,10 @@ abstract class AnalyticsEventNames {
   static const gameplayQuizCompleted = 'gameplay_quiz_completed';
   static const monetizationCategoryUnlocked = 'monetization_category_unlocked';
   static const engagementAppOpened = 'engagement_app_opened';
+
+  static const submissionCreated = 'submission_created';
+  static const submissionApproved = 'submission_approved';
+  static const submissionRejected = 'submission_rejected';
 }
 
 abstract class AnalyticsScreenNames {
@@ -40,6 +44,8 @@ abstract class AnalyticsScreenNames {
   static const roomsHub = 'rooms_hub';
   static const roomLobby = 'room_lobby';
   static const roomPlay = 'room_play';
+  static const sizdenGelenler = 'sizden_gelenler';
+  static const sizdenGelenlerAdmin = 'sizden_gelenler_admin';
 }
 
 abstract class AnalyticsAdPlacement {

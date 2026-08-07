@@ -9,12 +9,35 @@ import 'analytics/analytics_constants.dart';
 import 'services/ad_service.dart';
 import 'main.dart';
 import 'theme/app_theme.dart';
+import 'utils/image_url.dart';
 
 class UnlimitedModePage extends StatefulWidget {
-  const UnlimitedModePage({super.key, this.analyticsSource = 'bottom_tab'});
+  const UnlimitedModePage({
+    super.key,
+    this.analyticsSource = 'bottom_tab',
+    this.questionsCollection = 'unlimited_questions',
+    this.pollsCollection = 'unlimited_polls',
+    this.usersCollection = 'unlimited_users',
+    this.gameMode = 'unlimited',
+    this.title = 'Sınırsız Mod',
+    this.emoji = '♾️',
+  });
 
   /// [AnalyticsHelper.unlimitedOpen] için: `bottom_tab` | `home_card` vb.
   final String analyticsSource;
+
+  /// Aynı "sonsuz A/B oylama" mekaniğini farklı içerik havuzlarında (örn.
+  /// "Sizden Gelenler") tekrar kullanabilmek için koleksiyon isimleri
+  /// parametrik. Varsayılanlar mevcut Sınırsız Mod davranışını korur.
+  final String questionsCollection;
+  final String pollsCollection;
+  final String usersCollection;
+
+  /// Analytics `game_mode` alanı — farklı içerik havuzlarını ayırt etmek için.
+  final String gameMode;
+
+  final String title;
+  final String emoji;
 
   @override
   State<UnlimitedModePage> createState() => _UnlimitedModePageState();
@@ -58,7 +81,7 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsHelper.unlimitedOpen(source: widget.analyticsSource);
+    AnalyticsHelper.unlimitedOpen(source: widget.analyticsSource, gameMode: widget.gameMode);
     _uid = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
     _boot();
     // İlk yükleme başarısız olsa bile sayfada kalındıkça yeniden dene.
@@ -159,7 +182,7 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
       await _loadQuestions();
 
       if (_questions.isEmpty) {
-        throw Exception('Soru bulunamadı (unlimited_questions boş)'); 
+        throw Exception('Soru bulunamadı (${widget.questionsCollection} boş)');
       }
 
       // 2) Kullanıcıya özel sıra / cursor yükle veya oluştur
@@ -179,7 +202,7 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
 
   Future<void> _loadQuestions() async {
     final snap = await FirebaseFirestore.instance
-        .collection('unlimited_questions')
+        .collection(widget.questionsCollection)
         .where('active', isEqualTo: true)
         .get();
 
@@ -201,7 +224,7 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
 
   Future<void> _loadOrCreateUserOrder() async {
     final stateRef = FirebaseFirestore.instance
-        .collection('unlimited_users')
+        .collection(widget.usersCollection)
         .doc(_uid)
         .collection('state')
         .doc('default');
@@ -280,6 +303,18 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
     }
     final currentId = _order[_cursor % _order.length];
     _current = _questions.firstWhere((q) => q.id == currentId, orElse: () => _questions.first);
+    _precacheNextQuestion();
+  }
+
+  /// Kullanıcı mevcut soruya bakarken bir sonraki sorunun görsellerini
+  /// arka planda indirip önbelleğe alır.
+  void _precacheNextQuestion() {
+    if (!mounted || _order.isEmpty || _questions.isEmpty) return;
+    final nextId = _order[(_cursor + 1) % _order.length];
+    final next =
+        _questions.firstWhere((q) => q.id == nextId, orElse: () => _questions.first);
+    precacheSafeImage(context, next.imageA);
+    precacheSafeImage(context, next.imageB);
   }
 
   Future<void> _vote(bool chooseA) async {
@@ -287,7 +322,7 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
     setState(() { _voting = true; });
 
     final q = _current!;
-    final pollRef = FirebaseFirestore.instance.collection('unlimited_polls').doc(q.id);
+    final pollRef = FirebaseFirestore.instance.collection(widget.pollsCollection).doc(q.id);
 
     try {
       // Sayaç artır (transaction)
@@ -312,6 +347,7 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
         choseA: chooseA,
         selected: chooseA ? q.optionA : q.optionB,
         opponent: chooseA ? q.optionB : q.optionA,
+        gameMode: widget.gameMode,
       );
 
       // Yüzdeleri oku ve göster
@@ -380,7 +416,7 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
 
     // Firestore'a yaz
     final stateRef = FirebaseFirestore.instance
-        .collection('unlimited_users')
+        .collection(widget.usersCollection)
         .doc(_uid)
         .collection('state')
         .doc('default');
@@ -407,14 +443,14 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
 
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Sınırsız Mod')),
+        appBar: AppBar(title: Text(widget.title)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Sınırsız Mod')),
+        appBar: AppBar(title: Text(widget.title)),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -439,7 +475,7 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
 
     if (_current == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Sınırsız Mod')),
+        appBar: AppBar(title: Text(widget.title)),
         body: const Center(child: Text('Soru bulunamadı.')),
       );
     }
@@ -475,8 +511,8 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
                       color: AppColors.night2,
                       borderRadius: BorderRadius.circular(AppRadii.pill),
                     ),
-                    child: const Text('♾️ Sınırsız Mod',
-                        style: TextStyle(
+                    child: Text('${widget.emoji} ${widget.title}',
+                        style: const TextStyle(
                           color: AppColors.cloud,
                           fontWeight: FontWeight.w800,
                           fontSize: 13,
@@ -509,6 +545,7 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
                     pctA: _pctA,
                     pctB: _pctB,
                     selectedIsA: _selectedIsA,
+                    pollsCollection: widget.pollsCollection,
                     onVoteA: () => _vote(true),
                     onVoteB: () => _vote(false),
                   ),
@@ -558,6 +595,7 @@ class _QuestionCard extends StatelessWidget {
   final int? pctA;
   final int? pctB;
   final bool? selectedIsA; // true = A seçildi, false = B seçildi, null = henüz seçilmedi
+  final String pollsCollection;
   final VoidCallback onVoteA;
   final VoidCallback onVoteB;
 
@@ -569,6 +607,7 @@ class _QuestionCard extends StatelessWidget {
     required this.pctA,
     required this.pctB,
     this.selectedIsA,
+    required this.pollsCollection,
     required this.onVoteA,
     required this.onVoteB,
   }) : super(key: key);
@@ -599,6 +638,7 @@ class _QuestionCard extends StatelessWidget {
             pct: pctA,
             isSelected: selectedIsA == true,
             questionId: data.id,
+            pollsCollection: pollsCollection,
             isOptionA: true,
           ),
         ),
@@ -613,6 +653,7 @@ class _QuestionCard extends StatelessWidget {
             pct: pctB,
             isSelected: selectedIsA == false,
             questionId: data.id,
+            pollsCollection: pollsCollection,
             isOptionA: false,
           ),
         ),
@@ -630,6 +671,7 @@ class _ChoiceTile extends StatelessWidget {
   final int? pct;
   final bool isSelected; // Bu seçenek seçildi mi?
   final String questionId;
+  final String pollsCollection;
   final bool isOptionA; // Bu seçenek A mı B mi?
 
   const _ChoiceTile({
@@ -642,6 +684,7 @@ class _ChoiceTile extends StatelessWidget {
     required this.pct,
     required this.isSelected,
     required this.questionId,
+    required this.pollsCollection,
     required this.isOptionA,
   }) : super(key: key);
 
@@ -658,7 +701,7 @@ class _ChoiceTile extends StatelessWidget {
           color: AppColors.night2,
           image: (imageUrl != null && imageUrl!.isNotEmpty)
               ? DecorationImage(
-                  image: CachedNetworkImageProvider(imageUrl!),
+                  image: CachedNetworkImageProvider(safeImageUrl(imageUrl!)),
                   fit: BoxFit.cover,
                   colorFilter: ColorFilter.mode(
                     Colors.black.withValues(alpha: 0.35),
@@ -720,7 +763,7 @@ class _ChoiceTile extends StatelessWidget {
                 bottom: AppSpacing.md,
                 child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                   stream: FirebaseFirestore.instance
-                      .collection('unlimited_polls')
+                      .collection(pollsCollection)
                       .doc(questionId)
                       .snapshots(),
                   builder: (context, snapshot) {

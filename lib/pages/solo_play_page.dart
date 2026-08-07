@@ -9,6 +9,7 @@ import '../widgets/mode_card.dart';
 import 'daily_quiz_page.dart';
 import 'favorin_hangisi_page.dart';
 import 'sadece_soru_page.dart';
+import 'sizden_gelenler_page.dart';
 
 /// Solo Oyna hub — 3-tab bottom nav'ın ilk sekmesi. Kullanıcı isteği üzerine
 /// Günün Quizi artık ayrı bir tab değil, buradaki "Bugünün Önerisi" kartı
@@ -85,6 +86,16 @@ class _SoloPlayPageState extends State<SoloPlayPage> {
       MaterialPageRoute(
         settings: const RouteSettings(name: AnalyticsScreenNames.dilemma),
         builder: (_) => const SadeceSoruPage(),
+      ),
+    );
+  }
+
+  void _openSizdenGelenler() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: AnalyticsScreenNames.sizdenGelenler),
+        builder: (_) => const SizdenGelenlerPage(),
       ),
     );
   }
@@ -168,6 +179,18 @@ class _SoloPlayPageState extends State<SoloPlayPage> {
                 ),
                 foreground: const Color(0xFF3B2400),
                 onTap: _openDilemma,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              ModeCard(
+                emoji: '🙋',
+                title: 'Sizden Gelenler',
+                subtitle: 'Kendi sorunu gönder, başkalarınınkileri oyna',
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF2DBE8F), Color(0xFF15805C)],
+                ),
+                onTap: _openSizdenGelenler,
               ),
             ],
           ),

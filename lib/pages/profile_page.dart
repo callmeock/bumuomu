@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/admin_config.dart';
 import '../services/notification_service.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
+import 'admin_review_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -226,6 +229,18 @@ class _ProfilePageState extends State<ProfilePage> {
                       _loadLeaderboard();
                     },
                   ),
+                  if (AdminConfig.isOwner(user?.uid))
+                    _SettingsTile(
+                      icon: Icons.fact_check,
+                      title: 'Sizden Gelenler (Admin)',
+                      subtitle: 'Bekleyen soruları incele',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const AdminReviewPage()),
+                        );
+                      },
+                    ),
                 ],
               ),
             ),
@@ -289,9 +304,12 @@ class _ProfilePageState extends State<ProfilePage> {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    'ID: ${user?.uid.substring(0, 8) ?? 'N/A'}...',
-                    style: const TextStyle(fontSize: 12, color: AppColors.mistDim),
+                  GestureDetector(
+                    onTap: user == null ? null : () => _copyFullUid(context, user!.uid),
+                    child: Text(
+                      'ID: ${user?.uid.substring(0, 8) ?? 'N/A'}... (kopyalamak için dokun)',
+                      style: const TextStyle(fontSize: 12, color: AppColors.mistDim),
+                    ),
                   ),
                 ],
               ),
@@ -331,6 +349,14 @@ class _ProfilePageState extends State<ProfilePage> {
     if (result != null) {
       await _updateDisplayName(result.isEmpty ? 'Anonim Kullanıcı' : result);
     }
+  }
+
+  Future<void> _copyFullUid(BuildContext context, String uid) async {
+    await Clipboard.setData(ClipboardData(text: uid));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('UID kopyalandı: $uid')),
+    );
   }
 
   Widget _buildLeaderboard() {

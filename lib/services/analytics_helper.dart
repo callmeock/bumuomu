@@ -145,10 +145,10 @@ class AnalyticsHelper {
     );
   }
 
-  static Future<void> unlimitedOpen({String? source}) async {
+  static Future<void> unlimitedOpen({String? source, String gameMode = 'unlimited'}) async {
     await _emit(AnalyticsEventNames.gameplayUnlimitedOpened, {
       'event_category': 'gameplay',
-      'game_mode': 'unlimited',
+      'game_mode': gameMode,
       'source': _truncate(source ?? 'unknown'),
     });
   }
@@ -176,10 +176,11 @@ class AnalyticsHelper {
     required bool choseA,
     required String selected,
     required String opponent,
+    String gameMode = 'unlimited',
   }) async {
     await _emit(AnalyticsEventNames.gameplayUnlimitedVote, {
       'event_category': 'gameplay',
-      'game_mode': 'unlimited',
+      'game_mode': gameMode,
       'question_id': _truncate(questionId),
       'chose': choseA ? 'A' : 'B',
       'selected': _truncate(selected),
@@ -260,6 +261,29 @@ class AnalyticsHelper {
   static Future<void> appOpened() async {
     await _emit(AnalyticsEventNames.engagementAppOpened, {
       'event_category': 'engagement',
+    });
+  }
+
+  // ========== SIZDEN GELENLER ==========
+
+  static Future<void> submissionCreated({required String submissionId}) async {
+    await _emit(AnalyticsEventNames.submissionCreated, {
+      'event_category': 'sizden_gelenler',
+      'submission_id': _truncate(submissionId),
+    });
+  }
+
+  static Future<void> submissionApproved({required String submissionId}) async {
+    await _emit(AnalyticsEventNames.submissionApproved, {
+      'event_category': 'sizden_gelenler',
+      'submission_id': _truncate(submissionId),
+    });
+  }
+
+  static Future<void> submissionRejected({required String submissionId}) async {
+    await _emit(AnalyticsEventNames.submissionRejected, {
+      'event_category': 'sizden_gelenler',
+      'submission_id': _truncate(submissionId),
     });
   }
 }
