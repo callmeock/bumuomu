@@ -129,6 +129,7 @@ class AdService {
       placement: placement,
       adType: adType,
     );
+    AnalyticsHelper.adImpression(placement: placement, adType: adType);
 
     _rewardedInterstitialAd!.fullScreenContentCallback =
         FullScreenContentCallback(
@@ -176,6 +177,11 @@ class AdService {
         _log(
           'rewarded_interstitial REWARD EARNED | placement=$placement | '
           'type=${reward.type} | amount=${reward.amount}',
+        );
+        AnalyticsHelper.adRewarded(
+          placement: placement,
+          rewardType: reward.type,
+          rewardAmount: reward.amount,
         );
         if (!completer.isCompleted) {
           completer.complete(true);
@@ -318,6 +324,7 @@ class AdService {
     }
 
     await AnalyticsHelper.adOpened(placement: placement, adType: adType);
+    AnalyticsHelper.adImpression(placement: placement, adType: adType);
 
     _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {

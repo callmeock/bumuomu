@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'analytics_helper.dart';
 
 /// Haftalık reklamsız abonelik (`com.ock.bumuomu.premium.weekly`).
 /// Sunucu taraflı receipt doğrulama yok — mağaza seviyesi koruma bu ölçekte
@@ -91,9 +92,19 @@ class SubscriptionService {
           case PurchaseStatus.purchased:
           case PurchaseStatus.restored:
             await _grantEntitlement();
+            AnalyticsHelper.purchaseSucceeded(
+              productId: purchase.productID,
+              method: purchase.status == PurchaseStatus.restored ? 'restored' : 'purchased',
+              valueUsd: _weeklyProduct?.rawPrice,
+              currency: _weeklyProduct?.currencyCode,
+            );
             break;
           case PurchaseStatus.error:
             _log('purchase error: ${purchase.error}');
+            AnalyticsHelper.purchaseFailed(
+              productId: purchase.productID,
+              reason: purchase.error?.message,
+            );
             break;
           case PurchaseStatus.pending:
           case PurchaseStatus.canceled:

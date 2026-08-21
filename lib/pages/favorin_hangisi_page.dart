@@ -190,6 +190,10 @@ class _FavorinHangisiPageState extends State<FavorinHangisiPage> {
         categoryName: item.name,
         gameMode: 'test_quiz',
       );
+      AnalyticsHelper.coreAction(
+        name: CoreActionName.favorin,
+        params: {'phase': 'start', 'game_mode': 'test_quiz'},
+      );
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -212,6 +216,10 @@ class _FavorinHangisiPageState extends State<FavorinHangisiPage> {
         categoryKey: item.id,
         categoryName: item.name,
         gameMode: 'tournament',
+      );
+      AnalyticsHelper.coreAction(
+        name: CoreActionName.favorin,
+        params: {'phase': 'start', 'game_mode': 'tournament'},
       );
       Navigator.push(
         context,

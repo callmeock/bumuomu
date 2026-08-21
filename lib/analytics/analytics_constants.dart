@@ -25,6 +25,27 @@ abstract class AnalyticsEventNames {
   static const submissionCreated = 'submission_created';
   static const submissionApproved = 'submission_approved';
   static const submissionRejected = 'submission_rejected';
+
+  // --- Dashboard contract events (fixed names, do not rename) ---
+  static const contractAppOpen = 'app_open';
+  static const contractOnboardingCompleted = 'onboarding_completed';
+  static const contractCoreAction = 'core_action';
+  static const contractPaywallShown = 'paywall_shown';
+  static const contractPurchaseSucceeded = 'purchase_succeeded';
+  static const contractPurchaseFailed = 'purchase_failed';
+  static const contractAdImpression = 'ad_impression';
+  static const contractAdRewarded = 'ad_rewarded';
+  static const contractRatePromptShown = 'rate_prompt_shown';
+  static const contractRatePromptResult = 'rate_prompt_result';
+}
+
+/// [AnalyticsHelper.coreAction] için `name` parametresi değerleri.
+abstract class CoreActionName {
+  static const quiz = 'quiz';
+  static const favorin = 'favorin';
+  static const dailyQuiz = 'daily_quiz';
+  static const unlimited = 'unlimited';
+  static const roomPlay = 'room_play';
 }
 
 abstract class AnalyticsScreenNames {

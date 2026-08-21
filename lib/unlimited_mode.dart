@@ -82,6 +82,10 @@ class _UnlimitedModePageState extends State<UnlimitedModePage> {
   void initState() {
     super.initState();
     AnalyticsHelper.unlimitedOpen(source: widget.analyticsSource, gameMode: widget.gameMode);
+    AnalyticsHelper.coreAction(
+      name: CoreActionName.unlimited,
+      params: {'phase': 'start', 'source': widget.analyticsSource},
+    );
     _uid = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
     _boot();
     // İlk yükleme başarısız olsa bile sayfada kalındıkça yeniden dene.

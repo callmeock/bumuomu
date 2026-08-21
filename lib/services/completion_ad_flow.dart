@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../analytics/analytics_constants.dart';
 import 'ad_service.dart';
 import 'analytics_helper.dart';
+import 'rate_service.dart';
 
 /// Kategori/oyun tamamlama sonrası otomatik reklam akışı.
 ///
@@ -50,5 +51,7 @@ class CompletionAdFlow {
     } catch (_) {
       // Ad not ready / failed — never block the completion screen for this.
     }
+
+    RateService.maybePromptForReview(trigger: 'category_completed');
   }
 }

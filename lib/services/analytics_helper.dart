@@ -286,4 +286,90 @@ class AnalyticsHelper {
       'submission_id': _truncate(submissionId),
     });
   }
+
+  // ========== CONTRACT EVENTS (dashboard) ==========
+
+  static Future<void> contractAppOpen() async {
+    await _emit(AnalyticsEventNames.contractAppOpen, const {});
+  }
+
+  static Future<void> onboardingCompleted({required String method}) async {
+    await _emit(AnalyticsEventNames.contractOnboardingCompleted, {
+      'method': _truncate(method), // 'completed' | 'skipped'
+    });
+  }
+
+  static Future<void> coreAction({
+    required String name,
+    Map<String, Object>? params,
+  }) async {
+    await _emit(AnalyticsEventNames.contractCoreAction, {
+      'name': _truncate(name),
+      ...?params,
+    });
+  }
+
+  static Future<void> paywallShown({required String source}) async {
+    await _emit(AnalyticsEventNames.contractPaywallShown, {
+      'source': _truncate(source),
+    });
+  }
+
+  static Future<void> purchaseSucceeded({
+    required String productId,
+    required String method, // 'purchased' | 'restored'
+    double? valueUsd,
+    String? currency,
+  }) async {
+    await _emit(AnalyticsEventNames.contractPurchaseSucceeded, {
+      'product_id': _truncate(productId),
+      'method': _truncate(method),
+      if (valueUsd != null) 'value': valueUsd,
+      if (currency != null) 'currency': _truncate(currency),
+    });
+  }
+
+  static Future<void> purchaseFailed({
+    required String productId,
+    String? reason,
+  }) async {
+    await _emit(AnalyticsEventNames.contractPurchaseFailed, {
+      'product_id': _truncate(productId),
+      if (reason != null) 'reason': _truncate(reason),
+    });
+  }
+
+  static Future<void> adImpression({
+    required String placement,
+    required String adType,
+  }) async {
+    await _emit(AnalyticsEventNames.contractAdImpression, {
+      'placement': _truncate(placement),
+      'ad_type': _truncate(adType),
+    });
+  }
+
+  static Future<void> adRewarded({
+    required String placement,
+    String? rewardType,
+    num? rewardAmount,
+  }) async {
+    await _emit(AnalyticsEventNames.contractAdRewarded, {
+      'placement': _truncate(placement),
+      if (rewardType != null) 'reward_type': _truncate(rewardType),
+      if (rewardAmount != null) 'reward_amount': rewardAmount,
+    });
+  }
+
+  static Future<void> ratePromptShown({required String trigger}) async {
+    await _emit(AnalyticsEventNames.contractRatePromptShown, {
+      'trigger': _truncate(trigger),
+    });
+  }
+
+  static Future<void> ratePromptResult({required String result}) async {
+    await _emit(AnalyticsEventNames.contractRatePromptResult, {
+      'result': _truncate(result), // 'shown' | 'unknown'
+    });
+  }
 }

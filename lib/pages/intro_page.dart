@@ -84,9 +84,10 @@ class _IntroPageState extends State<IntroPage> {
     super.dispose();
   }
 
-  Future<void> _completeIntro() async {
+  Future<void> _completeIntro({required String method}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('intro_completed', true);
+    AnalyticsHelper.onboardingCompleted(method: method);
     if (!mounted) return;
     Navigator.of(context).pushReplacementNamed('/main');
   }
@@ -98,7 +99,7 @@ class _IntroPageState extends State<IntroPage> {
         curve: Curves.easeInOut,
       );
     } else {
-      _completeIntro();
+      _completeIntro(method: 'completed');
     }
   }
 
@@ -127,7 +128,7 @@ class _IntroPageState extends State<IntroPage> {
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: TextButton(
-                    onPressed: _completeIntro,
+                    onPressed: () => _completeIntro(method: 'skipped'),
                     child: const Text(
                       'Atla',
                       style: TextStyle(fontSize: 16),

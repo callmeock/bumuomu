@@ -1,12 +1,18 @@
+import 'dart:async';
+import 'dart:io' show Platform;
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/ad_service.dart';
 import 'services/app_open_ad_service.dart';
@@ -43,16 +49,21 @@ Route<dynamic>? _onGenerateRoute(RouteSettings settings) {
   return null;
 }
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  AnalyticsSession.start();
-  await Firebase.initializeApp();
-
-  try {
-    await SubscriptionService.initialize();
-  } catch (e) {
-    // ignore: avoid_print
-    print("❌ Abonelik durumu başlatılamadı: $e");
+/// AdMob'u ATT sonucuna göre başlatır. UI ilk frame'i çizildikten sonra
+/// çağrılır: iOS'ta izin diyaloğu ancak uygulama görünürken tetiklenebilir,
+/// ve AdMob'un ilk isteğinden önce onay durumunun bilinmesi gerekir.
+Future<void> _requestAttAndInitAds() async {
+  if (Platform.isIOS) {
+    try {
+      final status = await AppTrackingTransparency.trackingAuthorizationStatus;
+      if (status == TrackingStatus.notDetermined) {
+        await AppTrackingTransparency.requestTrackingAuthorization();
+      }
+    } catch (e) {
+      // ignore: avoid_print
+      print("❌ ATT izin isteği hatası: $e");
+      FirebaseCrashlytics.instance.recordError(e, null, fatal: false, reason: 'att request failed');
+    }
   }
 
   // 📱 AdMob'u başlat (8.x: InitializationStatus döner)
@@ -74,36 +85,70 @@ Future<void> main() async {
   } catch (e) {
     // ignore: avoid_print
     print("❌ AdMob başlatma hatası: $e");
+    FirebaseCrashlytics.instance.recordError(e, null, fatal: false, reason: 'admob init failed');
   }
+}
 
-  // 🔔 Background message handler'ı kaydet
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  await runZonedGuarded<Future<void>>(() async {
+    AnalyticsSession.start();
+    await Firebase.initializeApp();
 
-  // 🔐 Anonim Auth
-  try {
-    await FirebaseAuth.instance.signInAnonymously();
-    // ignore: avoid_print
-    print("✅ Anonim kullanıcı girişi başarılı");
-  } catch (e) {
-    // ignore: avoid_print
-    print("❌ Anonim giriş hatası: $e");
-  }
+    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
 
-  final user = FirebaseAuth.instance.currentUser;
-  if (user != null) {
-    await FirebaseAnalytics.instance.setUserId(id: user.uid);
-    // ignore: avoid_print
-    print("✅ Analytics userId ayarlandı: ${user.uid}");
-  }
+    try {
+      await SubscriptionService.initialize();
+    } catch (e) {
+      // ignore: avoid_print
+      print("❌ Abonelik durumu başlatılamadı: $e");
+      FirebaseCrashlytics.instance.recordError(e, null, fatal: false, reason: 'subscription init failed');
+    }
 
-  // 🔔 Notification servisini başlat
-  await NotificationService.initialize();
+    // 🔔 Background message handler'ı kaydet
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  await AnalyticsHelper.appOpened();
+    await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-  runApp(const MyApp());
+    // 🔐 Anonim Auth
+    try {
+      await FirebaseAuth.instance.signInAnonymously();
+      // ignore: avoid_print
+      print("✅ Anonim kullanıcı girişi başarılı");
+    } catch (e) {
+      // ignore: avoid_print
+      print("❌ Anonim giriş hatası: $e");
+      FirebaseCrashlytics.instance.recordError(e, null, fatal: false, reason: 'anonymous auth failed');
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await FirebaseAnalytics.instance.setUserId(id: user.uid);
+      // ignore: avoid_print
+      print("✅ Analytics userId ayarlandı: ${user.uid}");
+    }
+
+    // 🔔 Notification servisini başlat
+    await NotificationService.initialize();
+
+    await AnalyticsHelper.appOpened();
+    await AnalyticsHelper.contractAppOpen();
+
+    runApp(const MyApp());
+
+    // ATT izni + AdMob başlatma: ilk frame çizildikten sonra (ATT diyaloğu
+    // yalnızca uygulama görünürken tetiklenebilir).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requestAttAndInitAds();
+    });
+  }, (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+  });
 }
 
 class MyApp extends StatelessWidget {

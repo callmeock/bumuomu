@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../analytics/analytics_constants.dart';
 import '../services/admin_config.dart';
+import '../services/analytics_helper.dart';
 import '../services/notification_service.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
@@ -407,8 +409,15 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 }
 
-class _PremiumCard extends StatelessWidget {
+class _PremiumCard extends StatefulWidget {
   const _PremiumCard();
+
+  @override
+  State<_PremiumCard> createState() => _PremiumCardState();
+}
+
+class _PremiumCardState extends State<_PremiumCard> {
+  bool _paywallShownLogged = false;
 
   Future<void> _buy(BuildContext context) async {
     try {
@@ -459,6 +468,13 @@ class _PremiumCard extends StatelessWidget {
               ),
             ),
           );
+        }
+
+        if (!_paywallShownLogged) {
+          _paywallShownLogged = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            AnalyticsHelper.paywallShown(source: AnalyticsScreenNames.profile);
+          });
         }
 
         final product = SubscriptionService.weeklyProduct;

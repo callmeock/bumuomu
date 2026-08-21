@@ -26,6 +26,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-7853141950552414~7793582650</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>Bu izin, sana daha alakalı reklamlar gösterebilmemiz için kullanılır.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>

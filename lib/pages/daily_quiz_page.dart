@@ -264,6 +264,10 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
       categoryName: _dailyQuiz!.name,
       gameMode: 'quiz',
     );
+    AnalyticsHelper.coreAction(
+      name: CoreActionName.dailyQuiz,
+      params: {'phase': 'start', 'game_mode': 'quiz'},
+    );
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -307,6 +311,10 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
         categoryName: f.name,
         gameMode: 'test_quiz',
       );
+      AnalyticsHelper.coreAction(
+        name: CoreActionName.dailyQuiz,
+        params: {'phase': 'start', 'game_mode': 'test_quiz'},
+      );
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -332,6 +340,10 @@ class _DailyQuizPageState extends State<DailyQuizPage> {
         categoryKey: f.id,
         categoryName: f.name,
         gameMode: 'tournament',
+      );
+      AnalyticsHelper.coreAction(
+        name: CoreActionName.dailyQuiz,
+        params: {'phase': 'start', 'game_mode': 'tournament'},
       );
       Navigator.push(
         context,

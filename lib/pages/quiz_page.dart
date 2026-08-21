@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../analytics/analytics_constants.dart';
 import '../main.dart';
 import '../services/vote_service.dart';
 import '../services/share_helper.dart';
@@ -47,6 +48,10 @@ class _QuizPageState extends State<QuizPage> {
       categoryKey: widget.categoryKey,
       categoryName: widget.categoryName,
       totalQuestions: totalQuestions,
+    );
+    AnalyticsHelper.coreAction(
+      name: CoreActionName.quiz,
+      params: {'phase': 'start', 'category_key': widget.categoryKey},
     );
   }
 
@@ -176,6 +181,10 @@ class _QuizPageState extends State<QuizPage> {
       categoryKey: widget.categoryKey,
       categoryName: widget.categoryName,
       totalQuestions: totalQuestions,
+    );
+    AnalyticsHelper.coreAction(
+      name: CoreActionName.quiz,
+      params: {'phase': 'complete', 'category_key': widget.categoryKey},
     );
 
     await CompletionAdFlow.onCategoryCompleted(

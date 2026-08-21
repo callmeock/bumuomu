@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../analytics/analytics_constants.dart';
 import '../services/ad_service.dart';
+import '../services/analytics_helper.dart';
 import '../services/room_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/image_url.dart';
@@ -39,6 +40,10 @@ class _RoomPlayPageState extends State<RoomPlayPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsHelper.coreAction(
+      name: CoreActionName.roomPlay,
+      params: {'phase': 'start', 'room_code': widget.code},
+    );
     // Cheap 1s rebuild tick to recompute the countdown display and check
     // deadline expiry — actual timing authority is roundDeadline on the room
     // doc, this is just what drives the local re-render.
@@ -97,6 +102,10 @@ class _RoomPlayPageState extends State<RoomPlayPage> {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 AdService.showRewardedInterstitialAd(
                   placement: AnalyticsAdPlacement.roomComplete,
+                );
+                AnalyticsHelper.coreAction(
+                  name: CoreActionName.roomPlay,
+                  params: {'phase': 'complete', 'room_code': widget.code},
                 );
               });
             }

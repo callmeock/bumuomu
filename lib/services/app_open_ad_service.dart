@@ -86,6 +86,10 @@ class AppOpenAdService {
       placement: AnalyticsAdPlacement.appOpenResume,
       adType: 'app_open',
     );
+    AnalyticsHelper.adImpression(
+      placement: AnalyticsAdPlacement.appOpenResume,
+      adType: 'app_open',
+    );
 
     ad.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
